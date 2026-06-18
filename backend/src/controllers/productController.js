@@ -7,19 +7,28 @@ const addProduct = async (req, res) => {
       product_name,
       category,
       brand,
+      size,
       price,
       stock_quantity
     } = req.body;
 
     const newProduct = await pool.query(
       `INSERT INTO products
-      (product_name, category, brand, price, stock_quantity)
-      VALUES ($1,$2,$3,$4,$5)
+      (
+        product_name,
+        category,
+        brand,
+        size,
+        price,
+        stock_quantity
+      )
+      VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING *`,
       [
         product_name,
         category,
         brand,
+        size,
         price,
         stock_quantity
       ]

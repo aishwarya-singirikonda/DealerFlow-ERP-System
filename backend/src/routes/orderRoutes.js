@@ -5,6 +5,7 @@ const {
   createOrder,
   approveOrder,
   getAllOrders,
+  getOrderById,
   updateOrderStatus
 } = require("../controllers/orderController");
 
@@ -23,6 +24,12 @@ router.get(
   "/",
   verifyToken,
   getAllOrders
+);
+
+router.get(
+  "/:id",
+  verifyToken,
+  getOrderById
 );
 
 router.put(

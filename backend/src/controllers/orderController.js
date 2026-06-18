@@ -1,68 +1,93 @@
 const pool = require("../config/db");
 
-const createOrder = async (req, res) => {
-  try {
-    const { dealer_id, items } = req.body;
 
-    // Validation
+// CREATE ORDER
+const createOrder = async (req, res) => {
+
+  try {
+
+    let { dealer_id, items } = req.body;
+
+    // Dealer automatically uses his own dealer_id
+    if (req.user.role === "dealer") {
+
+      dealer_id = req.user.dealer_id;
+
+    }
+
     if (!dealer_id || !items || items.length === 0) {
+
       return res.status(400).json({
         success: false,
         message: "Dealer and items are required"
       });
+
     }
 
-    // Check dealer exists
+    // Dealer Exists
     const dealerResult = await pool.query(
-      "SELECT * FROM dealers WHERE id = $1",
+      "SELECT * FROM dealers WHERE id=$1",
       [dealer_id]
     );
 
     if (dealerResult.rows.length === 0) {
+
       return res.status(404).json({
         success: false,
         message: "Dealer not found"
       });
+
     }
 
-    // Calculate total amount
     let totalAmount = 0;
 
+    // Calculate Amount
     for (const item of items) {
 
       const productResult = await pool.query(
-        "SELECT * FROM products WHERE id = $1",
+        "SELECT * FROM products WHERE id=$1",
         [item.product_id]
       );
 
       if (productResult.rows.length === 0) {
+
         return res.status(404).json({
           success: false,
-          message: `Product ${item.product_id} not found`
+          message: "Product not found"
         });
+
       }
 
       const product = productResult.rows[0];
 
       if (product.stock_quantity < item.quantity) {
+
         return res.status(400).json({
           success: false,
           message: `Insufficient stock for ${product.product_name}`
         });
+
       }
 
-      totalAmount += Number(product.price) * Number(item.quantity);
+      totalAmount +=
+        Number(product.price) *
+        Number(item.quantity);
+
     }
 
-    // Create Order
+    // Create Order with Pending Status
     const orderResult = await pool.query(
-      `INSERT INTO orders
+      `
+      INSERT INTO orders
       (
         dealer_id,
-        total_amount
+        total_amount,
+        status
       )
-      VALUES ($1, $2)
-      RETURNING *`,
+      VALUES
+      ($1,$2,'Pending')
+      RETURNING *
+      `,
       [
         dealer_id,
         totalAmount
@@ -75,21 +100,24 @@ const createOrder = async (req, res) => {
     for (const item of items) {
 
       const productResult = await pool.query(
-        "SELECT * FROM products WHERE id = $1",
+        "SELECT * FROM products WHERE id=$1",
         [item.product_id]
       );
 
       const product = productResult.rows[0];
 
       await pool.query(
-        `INSERT INTO order_items
+        `
+        INSERT INTO order_items
         (
           order_id,
           product_id,
           quantity,
           price
         )
-        VALUES ($1, $2, $3, $4)`,
+        VALUES
+        ($1,$2,$3,$4)
+        `,
         [
           order.id,
           item.product_id,
@@ -97,12 +125,12 @@ const createOrder = async (req, res) => {
           product.price
         ]
       );
+
     }
 
-    // Success Response
     res.status(201).json({
       success: true,
-      message: "Order created successfully",
+      message: "Order placed successfully and sent to admin",
       order
     });
 
@@ -116,38 +144,119 @@ const createOrder = async (req, res) => {
     });
 
   }
+
 };
 
-const approveOrder = async (req, res) => {
+
+// GET ORDER BY ID
+const getOrderById = async (req, res) => {
+
   try {
 
     const { id } = req.params;
 
-    // Check Order
     const orderResult = await pool.query(
-      "SELECT * FROM orders WHERE id = $1",
+      `
+      SELECT
+        o.id,
+        d.dealer_name,
+        d.owner_name,
+        d.phone,
+        d.address,
+        o.total_amount,
+        o.status,
+        o.created_at
+      FROM orders o
+      JOIN dealers d
+      ON o.dealer_id=d.id
+      WHERE o.id=$1
+      `,
       [id]
     );
 
     if (orderResult.rows.length === 0) {
+
+      return res.status(404).json({
+        success:false,
+        message:"Order not found"
+      });
+
+    }
+
+    const itemsResult = await pool.query(
+      `
+      SELECT
+        p.product_name,
+        oi.quantity,
+        oi.price
+      FROM order_items oi
+      JOIN products p
+      ON oi.product_id=p.id
+      WHERE oi.order_id=$1
+      `,
+      [id]
+    );
+
+    res.status(200).json({
+      success:true,
+      order:{
+        ...orderResult.rows[0],
+        items:itemsResult.rows
+      }
+    });
+
+  } catch(error){
+
+    console.error(error);
+
+    res.status(500).json({
+      success:false,
+      message:"Server Error"
+    });
+
+  }
+
+};
+
+// APPROVE ORDER
+const approveOrder = async (req, res) => {
+
+  try {
+
+    const { id } = req.params;
+
+    const orderResult = await pool.query(
+      "SELECT * FROM orders WHERE id=$1",
+      [id]
+    );
+
+    if (orderResult.rows.length === 0) {
+
       return res.status(404).json({
         success: false,
         message: "Order not found"
       });
+
     }
 
     const order = orderResult.rows[0];
 
-    if (order.status === "Approved") {
+    if (order.status !== "Pending") {
+
       return res.status(400).json({
         success: false,
-        message: "Order already approved"
+        message: "Only pending orders can be approved"
       });
+
     }
 
     // Get Order Items
     const itemsResult = await pool.query(
-      "SELECT * FROM order_items WHERE order_id = $1",
+      `
+      SELECT *
+      FROM order_items
+      WHERE order_id=$1
+      `,
       [id]
     );
 
@@ -155,9 +264,11 @@ const approveOrder = async (req, res) => {
     for (const item of itemsResult.rows) {
 
       await pool.query(
-        `UPDATE products
-         SET stock_quantity = stock_quantity - $1
-         WHERE id = $2`,
+        `
+        UPDATE products
+        SET stock_quantity = stock_quantity - $1
+        WHERE id = $2
+        `,
         [
           item.quantity,
           item.product_id
@@ -168,9 +279,11 @@ const approveOrder = async (req, res) => {
 
     // Update Order Status
     await pool.query(
-      `UPDATE orders
-       SET status = 'Approved'
-       WHERE id = $1`,
+      `
+      UPDATE orders
+      SET status='Approved'
+      WHERE id=$1
+      `,
       [id]
     );
 
@@ -189,22 +302,58 @@ const approveOrder = async (req, res) => {
     });
 
   }
+
 };
+
+
+// GET ALL ORDERS
 const getAllOrders = async (req, res) => {
+
   try {
 
-    const orders = await pool.query(`
-      SELECT
-        o.id,
-        d.dealer_name,
-        o.total_amount,
-        o.status,
-        o.created_at
-      FROM orders o
-      JOIN dealers d
-      ON o.dealer_id = d.id
-      ORDER BY o.created_at DESC
-    `);
+    let orders;
+
+    // Dealer sees only his own orders
+    if (req.user.role === "dealer") {
+
+      orders = await pool.query(
+        `
+        SELECT
+          o.id,
+          d.dealer_name,
+          o.total_amount,
+          o.status,
+          o.created_at
+        FROM orders o
+        JOIN dealers d
+        ON o.dealer_id=d.id
+        WHERE o.dealer_id=$1
+        ORDER BY o.created_at DESC
+        `,
+        [req.user.dealer_id]
+      );
+
+    }
+
+    // Admin and Staff see all orders
+    else {
+
+      orders = await pool.query(
+        `
+        SELECT
+          o.id,
+          d.dealer_name,
+          o.total_amount,
+          o.status,
+          o.created_at
+        FROM orders o
+        JOIN dealers d
+        ON o.dealer_id=d.id
+        ORDER BY o.created_at DESC
+        `
+      );
+
+    }
 
     res.status(200).json({
       success: true,
@@ -222,8 +371,13 @@ const getAllOrders = async (req, res) => {
     });
 
   }
+
 };
+
+
+// UPDATE ORDER STATUS
 const updateOrderStatus = async (req, res) => {
+
   try {
 
     const { id } = req.params;
@@ -231,30 +385,41 @@ const updateOrderStatus = async (req, res) => {
 
     const allowedStatuses = [
       "Pending",
-      "Rejected",
-      "Delivered"
+      "Approved",
+      "Delivered",
+      "Completed",
+      "Rejected"
     ];
 
     if (!allowedStatuses.includes(status)) {
+
       return res.status(400).json({
         success: false,
         message: "Invalid status"
       });
+
     }
 
     const result = await pool.query(
-      `UPDATE orders
-       SET status = $1
-       WHERE id = $2
-       RETURNING *`,
-      [status, id]
+      `
+      UPDATE orders
+      SET status=$1
+      WHERE id=$2
+      RETURNING *
+      `,
+      [
+        status,
+        id
+      ]
     );
 
     if (result.rows.length === 0) {
+
       return res.status(404).json({
         success: false,
         message: "Order not found"
       });
+
     }
 
     res.status(200).json({
@@ -273,9 +438,13 @@ const updateOrderStatus = async (req, res) => {
     });
 
   }
+
 };
+
+
 module.exports = {
   createOrder,
+  getOrderById,
   approveOrder,
   getAllOrders,
   updateOrderStatus

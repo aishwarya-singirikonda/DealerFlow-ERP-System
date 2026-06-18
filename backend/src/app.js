@@ -6,6 +6,8 @@ const dealerRoutes = require("./routes/dealerRoutes");
 const productRoutes = require("./routes/productRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const userRoutes = require("./routes/userRoutes");
 const app = express();
 
 app.use(cors());
@@ -30,5 +32,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 // Dashboard Routes
 app.use("/api/dashboard", dashboardRoutes);
-
+// Payment Routes
+app.use("/api/payments", paymentRoutes);
+// User Routes
+app.use("/api/users", userRoutes);
 module.exports = app;

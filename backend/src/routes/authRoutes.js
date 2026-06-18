@@ -1,18 +1,51 @@
 const express = require("express");
+
 const router = express.Router();
 
 const {
   registerUser,
   loginUser,
-  getProfile
+  getProfile,
+  updateProfile
 } = require("../controllers/authController");
+
 const {
-  verifyToken, authorizeRoles
+  verifyToken,
+  authorizeRoles
 } = require("../middleware/authMiddleware");
 
-router.post("/register", registerUser);
-router.post("/login", loginUser);
-router.get("/profile", verifyToken, getProfile);
+
+// Register
+router.post(
+  "/register",
+  registerUser
+);
+
+
+// Login
+router.post(
+  "/login",
+  loginUser
+);
+
+
+// Get Profile
+router.get(
+  "/profile",
+  verifyToken,
+  getProfile
+);
+
+
+// Update Profile
+router.put(
+  "/profile",
+  verifyToken,
+  updateProfile
+);
+
+
+// Admin-only Route
 router.get(
   "/admin-only",
   verifyToken,
@@ -26,5 +59,6 @@ router.get(
 
   }
 );
+
 
 module.exports = router;

@@ -16,7 +16,8 @@ const {
   authorizeRoles
 } = require("../middleware/authMiddleware");
 
-// Add Product
+
+// ADD PRODUCT (admin only)
 router.post(
   "/",
   verifyToken,
@@ -24,31 +25,35 @@ router.post(
   addProduct
 );
 
-// Get All Products
+
+// GET ALL PRODUCTS (ADMIN + STAFF + DEALER) ✅ FIXED
 router.get(
   "/",
   verifyToken,
-  authorizeRoles("admin", "staff"),
+  authorizeRoles("admin", "staff", "dealer"),
   getAllProducts
 );
 
-// Low Stock Products
+
+// LOW STOCK (admin + staff + dealer)
 router.get(
   "/low-stock",
   verifyToken,
-  authorizeRoles("admin", "staff"),
+  authorizeRoles("admin", "staff", "dealer"),
   getLowStockProducts
 );
 
-// Get Product By ID
+
+// GET PRODUCT BY ID
 router.get(
   "/:id",
   verifyToken,
-  authorizeRoles("admin", "staff"),
+  authorizeRoles("admin", "staff", "dealer"),
   getProductById
 );
 
-// Update Product
+
+// UPDATE PRODUCT (admin only)
 router.put(
   "/:id",
   verifyToken,
@@ -56,7 +61,8 @@ router.put(
   updateProduct
 );
 
-// Delete Product
+
+// DELETE PRODUCT (admin only)
 router.delete(
   "/:id",
   verifyToken,
